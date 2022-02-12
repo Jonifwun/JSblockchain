@@ -1,9 +1,12 @@
 const sha256 = require('sha256')
+const port = process.argv[2]
+const currentNodeURL = `http://localhost:${port}`
 
 function Blockchain (){
     this.chain = []
     this.pendingTransactions = []
     this.createNewBlock(0, '0', '0')
+    this.currentNodeURL = currentNodeURL
 }
 
 Blockchain.prototype.createNewBlock = function (nonce, previousBlockHash, hash){
