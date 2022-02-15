@@ -18,10 +18,33 @@ app.get('/blockchain', (req, res) => {
 })
 
 app.post('/transaction', (req, res) => {
-    const {amount, sender, recipient} = req.body
-    const blockIndex = coin.createNewTransaction(amount, sender, recipient)
+    const newTransaction = req.body
+    const blockIndex = coin.addToPendingTransactions(newTransaction)
     res.json({
         note: `Transaction will be added to block ${blockIndex}`
+    })
+})
+
+app.post('/transaction/broadcast', (req, res) => {
+    const {amount, sender, recipient} = req.body
+    const transaction = coin.createNewTransaction(amount, sender, recipient)
+    coin.addToPendingTransactions(transaction)
+    const requestPromises = []
+    coin.networkNodes.forEach(nodeAddress => {
+        const requestOptions = {
+            uri: nodeAddress + '/transaction',
+            method: 'POST',
+            body: transaction,
+            json: true
+        }
+        requestPromises.push(rp(requestOptions))
+    })
+
+    Promise.all(requestPromises)
+    .then(data =>{
+        res.json({
+            note: 'Transaction successfully broadcast'
+        })
     })
 })
 
@@ -78,18 +101,37 @@ app.post('/register-broadcast-node', (req, res) => {
     })
     .then(data => {
         res.json({
-            note: 'New node registered successfully'
+            note: 'New node registered successfully with network'
         })
     })
 }})
 
 //Each already existing node registers new node
 app.post('/register-node', (req, res) => {
+    const {newNodeURL} = req.body
+    console.log(newNodeURL)
+    if (coin.networkNodes.indexOf(newNodeURL) == -1 && coin.currentNodeURL !== newNodeURL){
+        coin.networkNodes.push(newNodeURL)
+        res.json({
+            note: 'New node registered successfully with current node'
+        })
+    }
 
 })
 
 //New node registers all original nodes
 app.post('/register-nodes-all', (req, res) => {
+    console.log(req.body)
+    const {allNodes} = req.body
+    
+    allNodes.forEach(networkNodeURL => {
+        if (coin.networkNodes.indexOf(networkNodeURL) == -1 && coin.currentNodeURL !== networkNodeURL){
+            coin.networkNodes.push(networkNodeURL)
+            res.json({
+                note: 'New node successfully registered existing network nodes'
+            })
+        }
+    })
 
 })
 
