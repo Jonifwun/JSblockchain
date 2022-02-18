@@ -1,7 +1,7 @@
 const express = require('express')
 const bodyParser = require ('body-parser')
 const Blockchain = require ('./blockchain')
-const rp = require('request-promise')
+const axios = require('axios')
 const uuid = require ('uuid').v1
 const nodeAddress = uuid().replace(/-/g, '')
 const port = process.argv[2]
@@ -9,9 +9,7 @@ const coin = new Blockchain()
 
 const app = express()
 app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({'extended': false}))
-
-
+app.use(bodyParser.urlencoded({'extended': true}))
 
 app.get('/blockchain', (req, res) => {
     res.send(coin)
@@ -32,12 +30,12 @@ app.post('/transaction/broadcast', (req, res) => {
     const requestPromises = []
     coin.networkNodes.forEach(nodeAddress => {
         const requestOptions = {
-            uri: nodeAddress + '/transaction',
+            url: nodeAddress + '/transaction',
             method: 'POST',
             body: transaction,
             json: true
         }
-        requestPromises.push(rp(requestOptions))
+        requestPromises.push(axios(requestOptions))
     })
 
     Promise.all(requestPromises)
@@ -69,70 +67,70 @@ app.get('/mine', (req, res) => {
 //Register node with the network and broadcast to other nodes
 app.post('/register-broadcast-node', (req, res) => {
     //Grab the new node URL
-    const newNodeURL = req.body.newNodeURL
+    var newNodeURL = req.body.newNodeURL.toString()
+    console.log(newNodeURL, coin.networkNodes)
     //Check that the node doesn't already exist in list of network nodes
-    if (coin.networkNodes.indexOf() == -1 ){
+    if (coin.networkNodes.indexOf() === -1){
         //Add node by pushing into networkNodes array
         coin.networkNodes.push(newNodeURL)
         //Initialize an empty array for to add a promise for each individual node
         const registerNodesPromises = []
         //Loop through current existing nodes
         coin.networkNodes.forEach(networkNode => {
+            const url = networkNode + '/register-node'
             const requestOptions = {
-                //Create register node uri for each node
-                uri: networkNode + '/register-node',
                 method: 'POST',
-                body: {newNodeURL},
-                json: true
-            }
+                data: {newNodeURL},
+                json: true,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }       
         //Push promise into register nodes array
-        registerNodesPromises.push(rp(requestOptions))    
+        registerNodesPromises.push(axios(url, requestOptions))
     })
 
     Promise.all(registerNodesPromises)
     .then(data => {
         const bulkRegisterOptions = {
-            uri: newNodeURL + '/register-nodes-all',
+            url: newNodeURL + '/register-nodes-all',
             method: 'POST',
-            body: { allNodes: [...coin.networkNodes, coin.currentNodeURL]},
+            data: { allNodes: [...coin.networkNodes, coin.currentNodeURL]},
             json: true
         }
-        return rp(bulkRegisterOptions)
+        return axios(bulkRegisterOptions)
     })
+    .catch(err => console.log(err))
     .then(data => {
         res.json({
             note: 'New node registered successfully with network'
         })
     })
+    .catch(err => {
+        console.log(err)
+    })
+    
 }})
 
-//Each already existing node registers new node
-app.post('/register-node', (req, res) => {
-    const {newNodeURL} = req.body
-    console.log(newNodeURL)
-    if (coin.networkNodes.indexOf(newNodeURL) == -1 && coin.currentNodeURL !== newNodeURL){
-        coin.networkNodes.push(newNodeURL)
-        res.json({
-            note: 'New node registered successfully with current node'
-        })
-    }
 
+//Each already existing node registers new node
+app.post('/register-node', async function (req, res){
+    const {newNodeURL} = await req.body
+    const nodeExists = coin.networkNodes.indexOf(newNodeURL) == -1
+    const notCurrentNode = coin.currentNodeURL !== newNodeURL
+    if (nodeExists && notCurrentNode){coin.networkNodes.push(newNodeURL)}
+    res.json({note: 'New node registered successfully with current node'})
 })
 
 //New node registers all original nodes
-app.post('/register-nodes-all', (req, res) => {
-    console.log(req.body)
-    const {allNodes} = req.body
-    
+app.post('/register-nodes-all', async function (req, res) {    
+    const allNodes = await req.body.allNodes
     allNodes.forEach(networkNodeURL => {
-        if (coin.networkNodes.indexOf(networkNodeURL) == -1 && coin.currentNodeURL !== networkNodeURL){
-            coin.networkNodes.push(networkNodeURL)
-            res.json({
-                note: 'New node successfully registered existing network nodes'
-            })
-        }
+        const nodeExists = coin.networkNodes.indexOf(networkNodeURL) == -1
+        const notCurrentNode = coin.currentNodeURL !== networkNodeURL
+        if (nodeExists && notCurrentNode){coin.networkNodes.push(networkNodeURL)}
     })
-
+    res.json({note: 'New node successfully registered existing network nodes'})
 })
 
 app.listen(port, () => {
