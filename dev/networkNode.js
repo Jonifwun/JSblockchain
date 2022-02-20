@@ -32,7 +32,7 @@ app.post('/transaction/broadcast', (req, res) => {
         const requestOptions = {
             url: nodeAddress + '/transaction',
             method: 'POST',
-            body: transaction,
+            data: transaction,
             json: true
         }
         requestPromises.push(axios(requestOptions))
@@ -58,19 +58,73 @@ app.get('/mine', (req, res) => {
     coin.createNewTransaction(6.25, 'XX00XX', nodeAddress)
     
     const newBlock = coin.createNewBlock(nonce, previousBlockHash, hash)
-    res.json({
-        note: 'New block mined',
-        block: newBlock
+
+    const newBlockRequests = []
+
+    coin.networkNodes.forEach(networkNodeURL => {
+        const requestOptions = {
+            url: networkNodeURL + '/recieve-new-block',
+            method: 'POST',
+            data: {newBlock},
+            json: true
+        }
+        requestOptions.push(axios(requestOptions))
     })
+
+    Promise.all(newBlockRequests)
+    .then(data => {
+        const requestOptions = {
+            url: coin.currentNodeURL + '/transaction/broadcast',
+            method: 'POST',
+            data: {
+                amount: 6.25,
+                sender: 'XX00XX',
+                recipient: nodeAddress
+            },
+            json: true
+        }
+
+        return axios(requestOptions)
+
+    })
+    .catch(err => console.log(err))
+    .then(data => {
+        res.json({
+            note: 'New block mined and broadcast successfully',
+            block: newBlock
+        })
+    })
+})
+
+app.post('/receive-new-block', (req, res) => {
+    const { newBlock } = req.body
+    const lastBlock = coin.getLastBlock()
+    const correctHash = lastBlock.hash === newBlock.previousBlockHash
+    const correctIndex = lastBlock['index'] + 1 === newBlock['index']
+    if (correctHash && correctIndex){
+        coin.chain.push(newBlock)
+        coin.pendingTransactions = []
+        res.json({
+            note: 'New block received and accepted',
+            newBlock
+        })
+    } else {
+        res.json({
+            note: `Block was rejected because ${!correctHash || !correctIndex ? 'previous block hash or index was incorrect' : ''}`,
+            newBlock
+        })
+    }
+
+    coin.pendingTransactions = []
+
 })
 
 //Register node with the network and broadcast to other nodes
 app.post('/register-broadcast-node', (req, res) => {
     //Grab the new node URL
-    var newNodeURL = req.body.newNodeURL.toString()
-    console.log(newNodeURL, coin.networkNodes)
+    var newNodeURL = req.body.newNodeURL
     //Check that the node doesn't already exist in list of network nodes
-    if (coin.networkNodes.indexOf() === -1){
+    if (coin.networkNodes.indexOf(newNodeURL) == -1){
         //Add node by pushing into networkNodes array
         coin.networkNodes.push(newNodeURL)
         //Initialize an empty array for to add a promise for each individual node
@@ -80,7 +134,7 @@ app.post('/register-broadcast-node', (req, res) => {
             const url = networkNode + '/register-node'
             const requestOptions = {
                 method: 'POST',
-                data: {newNodeURL},
+                data: { newNodeURL },
                 json: true,
                 headers: {
                     'Content-Type': 'application/json'
@@ -95,7 +149,7 @@ app.post('/register-broadcast-node', (req, res) => {
         const bulkRegisterOptions = {
             url: newNodeURL + '/register-nodes-all',
             method: 'POST',
-            data: { allNodes: [...coin.networkNodes, coin.currentNodeURL]},
+            data: {allNodes: [...coin.networkNodes, coin.currentNodeURL]},
             json: true
         }
         return axios(bulkRegisterOptions)
@@ -109,13 +163,16 @@ app.post('/register-broadcast-node', (req, res) => {
     .catch(err => {
         console.log(err)
     })
-    
+    } else {
+        res.json({
+            note: 'New node already registered with network'
+        })
 }})
 
 
 //Each already existing node registers new node
 app.post('/register-node', async function (req, res){
-    const {newNodeURL} = await req.body
+    const { newNodeURL } = await req.body
     const nodeExists = coin.networkNodes.indexOf(newNodeURL) == -1
     const notCurrentNode = coin.currentNodeURL !== newNodeURL
     if (nodeExists && notCurrentNode){coin.networkNodes.push(newNodeURL)}
