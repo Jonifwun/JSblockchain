@@ -63,12 +63,12 @@ app.get('/mine', (req, res) => {
 
     coin.networkNodes.forEach(networkNodeURL => {
         const requestOptions = {
-            url: networkNodeURL + '/recieve-new-block',
+            url: networkNodeURL + '/receive-new-block',
             method: 'POST',
             data: {newBlock},
             json: true
         }
-        requestOptions.push(axios(requestOptions))
+        newBlockRequests.push(axios(requestOptions))
     })
 
     Promise.all(newBlockRequests)

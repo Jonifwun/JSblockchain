@@ -6,7 +6,7 @@ const uuid = require ('uuid').v1
 function Blockchain (){
     this.chain = []
     this.pendingTransactions = []
-    this.createNewBlock(0, '0', '0')
+    this.createNewBlock(777, '0', '0')
     this.currentNodeURL = currentNodeURL
     this.networkNodes = []
 }
@@ -65,6 +65,39 @@ Blockchain.prototype.proofOfWork = function (previousBlockHash, currentBlockData
         hash = this.hashBlock(previousBlockHash, currentBlockData, nonce)
     } 
     return nonce
+}
+
+Blockchain.prototype.chainIsValid = function (blockchain){
+    let validChain = true
+    for (let i = 1; i < blockchain.length; i++){
+        const currentBlock = blockchain[i]
+        const prevBlock = blockchain[i - 1]
+        const currentBlockData = {
+            transactions: currentBlock['transactions'],
+            index: currentBlock['index']
+        }
+
+        const blockHash = this.hashBlock(currentBlock['previousBlockHash'], currentBlockData, currentBlock['nonce'])
+        if (blockHash.substring(0,4) !== '0000'){
+            validChain = false
+        }
+        if (currentBlock.previousBlockHash !== prevBlock.hash){
+            validChain = false
+        }
+    }
+
+    const genesisBlock = blockchain[0]
+    const correctNonce = genesisBlock['nonce'] === 777
+    const correctPreviousBlockHash = genesisBlock['previousBlockHash'] === '0'
+    const correctHash = genesisBlock['hash'] === '0'
+    const correctTransactions = genesisBlock['transactions'].length === 0
+
+    if( !correctNonce || !correctHash || !correctTransactions || !correctPreviousBlockHash){
+        validChain = false 
+    }
+    
+    return validChain
+
 }
 
 module.exports = Blockchain
