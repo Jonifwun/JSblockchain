@@ -190,6 +190,53 @@ app.post('/register-nodes-all', async function (req, res) {
     res.json({note: 'New node successfully registered existing network nodes'})
 })
 
+app.get('/consensus', (req, res) => {
+    const chainRequests = []
+    coin.networkNodes.forEach(networkNode => {
+        const requestOptions = {
+            url: networkNode + '/blockchain',
+            method: 'GET',
+            json: true,
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }
+        chainRequests.push(axios(requestOptions))
+    })
+
+    Promise.all(chainRequests)
+    .then(blockchains => {
+        const currentBlockchainLength = coin.chain.length
+        let longestChainLength = currentBlockchainLength
+        let newLongestChain = null
+        let newPendingTransactions = null
+        //Loop through each chain and check identify if another chain has a longer length
+        blockchains.forEach(blockchain => {         
+            if(blockchain.data.chain.length > longestChainLength){
+                longestChainLength = blockchain.data.chain.length
+                newLongestChain = blockchain.data.chain
+                newPendingTransactions = blockchain.data.pendingTransactions
+            } 
+        })
+        // Check that there isn't a new longest chain/the chain is valid if there is actually a new longest chain
+        if (!newLongestChain || !coin.chainIsValid(newLongestChain) && newLongestChain){
+            return res.json({
+                note: 'Current chain has not been replaced',
+                chain: coin.chain
+        })
+        //If there is a new longest & valid chain, replace the chain on this current node with the longest valid chain    
+        } else {
+            coin.chain = newLongestChain
+            coin.pendingTransactions = newPendingTransactions
+            return res.json({
+                note: 'Current chain has been replaced',
+                chain: coin.chain
+            })
+        }
+    })
+    .catch(err => console.log(err))
+})
+
 app.listen(port, () => {
     console.log(`app is listening on port ${port}`)
 })
