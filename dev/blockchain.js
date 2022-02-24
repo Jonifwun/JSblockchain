@@ -67,6 +67,58 @@ Blockchain.prototype.proofOfWork = function (previousBlockHash, currentBlockData
     return nonce
 }
 
+Blockchain.prototype.getBlock = function (hash){
+    let correctBlock = null
+    this.chain.forEach(block => { 
+            if(block.hash === hash){ correctBlock = block }
+    })
+
+    return correctBlock
+}
+
+Blockchain.prototype.getTransaction = function (transactionID){
+    let correctTransaction = null
+    let correctBlock = null
+
+    this.chain.forEach(block => {
+        block.transactions.forEach(transaction => {
+            if(transactionID === transaction.transactionID){
+                correctTransaction = transaction
+                correctBlock = block
+            }
+        })
+    })
+    return {
+        correctTransaction,
+        correctBlock
+    }
+}
+
+Blockchain.prototype.getAddressData = function (address){
+    const addressTransactions = []
+    let addressBalance = 0
+    //Look through each block and then each transaction to identify transactions associated with this address
+    this.chain.forEach(block => {
+        block.transactions.forEach(transaction => {
+            if (address === transaction.sender || address === transaction.recipient){
+                addressTransactions.push(transaction)
+            }
+        })
+    })
+    //If there are any transactions found...
+    if (addressTransactions.length){
+        //Loop through transaction array
+        addressTransactions.forEach(transaction => {
+            //Add or subtract transaction amount from balance depending on whether sender or recipient
+            transaction.sender === address ? (addressBalance += transaction.amount) : (addressBalance -= transaction.amount)
+        })
+    }
+    return {
+        addressTransactions,
+        addressBalance
+    }
+}
+
 Blockchain.prototype.chainIsValid = function (blockchain){
     let validChain = true
     for (let i = 1; i < blockchain.length; i++){

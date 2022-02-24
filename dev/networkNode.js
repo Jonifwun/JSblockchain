@@ -15,6 +15,46 @@ app.get('/blockchain', (req, res) => {
     res.send(coin)
 })
 
+app.get('/block/:blockhash', (req, res) => {
+    const hash = req.params.blockhash
+    const block = coin.getBlock(hash)
+    if (block) { 
+        return res.json({
+            note: 'Block found',
+            block
+        })
+    } else {
+        return res.json({
+            note: 'Block not found'
+        })
+    }
+})
+
+app.get('/transaction/:transactionID', (req, res) => {
+    const transactionID = req.params.transactionID
+    const { correctTransaction, correctBlock } = coin.getTransaction(transactionID)
+    if(correctTransaction && correctBlock){
+        return res.json({
+            note: 'Transaction found',
+            transaction: correctTransaction,
+            block: correctBlock
+         })
+    } else {
+        return res.json({
+            note: 'No transaction with this ID has been found'
+    })
+    }
+})
+
+app.get('/address/:address', (req, res) => {
+    const address = req.params.address
+    const { addressTransactions, addressBalance } = coin.getAddressData(address)
+    console.log (addressTransactions, addressBalance)
+    
+    addressTransactions.length && addressBalance ? res.json({ addressTransactions, addressBalance }) : res.json({ note: 'No transactions for this address found'})
+
+})
+
 app.post('/transaction', (req, res) => {
     const newTransaction = req.body
     const blockIndex = coin.addToPendingTransactions(newTransaction)
